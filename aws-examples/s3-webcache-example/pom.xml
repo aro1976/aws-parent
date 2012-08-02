@@ -1,0 +1,24 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<artifactId>s3-webcache-example</artifactId>
+	<packaging>war</packaging>
+	<name>AWS S3 WebCache Example</name>
+	<url>http://maven.apache.org</url>
+
+	<parent>
+		<groupId>br.com.dynamicflow.aws</groupId>
+		<artifactId>aws-examples</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+	</parent>
+	
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>br.com.dynamicflow.aws</groupId>
+				<artifactId>s3-webcache-maven-plugin</artifactId>
+				<version>0.0.1-SNAPSHOT</version>
+			</plugin>
+		</plugins>
+	</build>
+</project>
