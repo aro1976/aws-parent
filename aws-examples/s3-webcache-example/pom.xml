@@ -18,6 +18,11 @@
 				<groupId>br.com.dynamicflow.aws</groupId>
 				<artifactId>s3-webcache-maven-plugin</artifactId>
 				<version>0.0.1-SNAPSHOT</version>
+				<configuration>
+					<accessKey>AKIAJTQAWEXYFGAGKS4Q</accessKey>
+					<secretKey>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</secretKey>
+					<bucketName>data.fs.dynamicflow</bucketName>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>
