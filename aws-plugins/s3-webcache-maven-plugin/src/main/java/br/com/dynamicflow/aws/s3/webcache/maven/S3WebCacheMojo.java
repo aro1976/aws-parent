@@ -71,43 +71,42 @@ public class S3WebCacheMojo extends AbstractMojo {
 	private File buildDir;
 	
 	public void execute() {
-		
 		if (hostName==null || hostName.length()==0) {
 			hostName=bucketName+"."+S3_URL;
 		}
+		getLog().info("using hostName " + hostName);
 		
 		WebCacheConfig webCacheConfig = new WebCacheConfig(hostName);
 		
 		BasicAWSCredentials awsCredentials = new BasicAWSCredentials(accessKey,secretKey);
 		AmazonS3Client client = new AmazonS3Client(awsCredentials);
 		
-		String fileName = "grails_logo.jpg";
-		getLog().info( "establishing connection to S3" );	
-		try {
-			ObjectMetadata objectMetadata = client.getObjectMetadata(bucketName, fileName);
-			getLog().info( "object metadata ETag: " + objectMetadata.getETag());
-			getLog().info( "object metadata ContentMD5: " + objectMetadata.getContentMD5());
-			getLog().info( "object metadata ContentType: " + objectMetadata.getContentType());
-			getLog().info( "object metadata CacheControl: " + objectMetadata.getCacheControl());
-			getLog().info( "object metadata ContentEncoding: " + objectMetadata.getContentEncoding());
-			getLog().info( "object metadata ContentDisposition: " + objectMetadata.getContentDisposition());
-			getLog().info( "object metadata ContentLength: " + objectMetadata.getContentLength());
-			getLog().info( "object metadata LastModified: " + objectMetadata.getLastModified());
-			getLog().info( "determining files that should be uploaded" );
-		} catch (AmazonServiceException e) {
-			getLog().error(e);
-		} catch (AmazonClientException e) {
-			getLog().error(e);
-		}	
+		getLog().info( "determining files that should be uploaded" );
 		
-		getLog().info( "uploading files" );	
-		String uploadFileName = fileName;
-		String uploadFileUrl = hostName+"/"+uploadFileName;
+		String fileName = "grails_logo.jpg";
+		
+		// para cada arquivo
+		ObjectMetadata objectMetadata = retrieveObjectMetadata(client, fileName);	
+		
+		if (objectMetadata != null && objectMetadata.getETag().equals(calculateETag(fileName))) {
+			getLog().info("the object "+fileName+" stored at "+bucketName+" does not require update");
+		} else {
+			uploadFile(client, fileName);
+		}
+		
+		String digest = calculateDigest(fileName);
+		webCacheConfig.addToCachedFiles(fileName,digest);
+		
+		// finaliza para cada arquivo
+		generateConfigManifest(webCacheConfig);
+
+		getLog().info( "closing S3 connection" );	
+	}
+
+	private void uploadFile(AmazonS3Client client, String fileName) {
+		getLog().info("uploading file "+fileName+" to "+bucketName);	
 		try {
 			File file = new File(fileName);
-			String md5sum = Hex.encodeHexString(DigestUtils.md5(new FileInputStream(file)));
-			String sha256sum = Hex.encodeHexString(DigestUtils.sha256(new FileInputStream(file)));
-			getLog().info("generated md5sum: "+md5sum);
 			
 			MimetypesFileTypeMap mimetypesFileTypeMap = new MimetypesFileTypeMap();
 			ObjectMetadata objectMetadata = new ObjectMetadata();
@@ -121,27 +120,60 @@ public class S3WebCacheMojo extends AbstractMojo {
 			objectMetadata.setContentType(mimetypesFileTypeMap.getContentType(file));
 			client.putObject(bucketName, fileName, new FileInputStream(file), objectMetadata);
 			
-			getLog().info("uploaded:"+uploadFileUrl);
-			webCacheConfig.addToCachedFiles(fileName,sha256sum);
-		} catch (AmazonServiceException e) {
-			getLog().error(e);
-		} catch (AmazonClientException e) {
-			getLog().error(e);
 		} catch (FileNotFoundException e) {
 			getLog().error(e);
-		} catch (IOException e) {
+		} 
+	}
+	
+	private ObjectMetadata retrieveObjectMetadata(AmazonS3Client client, String fileName) {
+		getLog().info("retrieving metadata for "+fileName);
+		ObjectMetadata objectMetadata = null;
+
+		objectMetadata = client.getObjectMetadata(bucketName, fileName);
+		getLog().info( "object metadata ETag: " + objectMetadata.getETag());
+		getLog().info( "object metadata ContentMD5: " + objectMetadata.getContentMD5());
+		getLog().info( "object metadata ContentType: " + objectMetadata.getContentType());
+		getLog().info( "object metadata CacheControl: " + objectMetadata.getCacheControl());
+		getLog().info( "object metadata ContentEncoding: " + objectMetadata.getContentEncoding());
+		getLog().info( "object metadata ContentDisposition: " + objectMetadata.getContentDisposition());
+		getLog().info( "object metadata ContentLength: " + objectMetadata.getContentLength());
+		getLog().info( "object metadata LastModified: " + objectMetadata.getLastModified());
+
+		return objectMetadata;
+	}
+
+	private String calculateETag(String fileName) {
+		String eTag = null;
+		try {
+			eTag = Hex.encodeHexString(DigestUtils.md5(new FileInputStream(new File(fileName))));
+		} catch (Exception e) {
 			getLog().error(e);
-		}
-		
+		} 
+		getLog().info("eTag for "+fileName+" is "+eTag);
+		return eTag;
+	}
+	
+	private String calculateDigest(String fileName) {
+		String digest = null;
+		try {
+			digest = Hex.encodeHexString(DigestUtils.sha256(new FileInputStream(new File(fileName))));
+		} catch (Exception e) {
+			getLog().error(e);
+		} 
+		getLog().info("digest for "+fileName+" is "+digest);
+		return digest;
+	}
+	
+	private void generateConfigManifest(WebCacheConfig webCacheConfig) {
+		File manifestFile = new File(buildDir,"WEB-INF"+"/"+"s3-webcache.xml");
+		getLog().info("generating s3-webcache configuration manifest into "+ manifestFile.getPath());
 		try {
 			JAXBContext context = JAXBContext.newInstance(WebCacheConfig.class);
 			Marshaller marshaller = context.createMarshaller();
 			marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
-			marshaller.marshal(webCacheConfig, new File(buildDir,"WEB-INF"+"/"+"s3-webcache.xml"));
+			marshaller.marshal(webCacheConfig, manifestFile);
 		} catch (JAXBException e) {
 			getLog().error(e);
 		}
-
-		getLog().info( "closing S3 connection" );	
 	}
 }
