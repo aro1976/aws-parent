@@ -1,0 +1,13 @@
+#imageSelector { width:676px; height:497px; border:1px solid #adadad; margin:0 auto; position:relative; background-color:#dfdede; }
+#status { width:380px; height:21px; padding:10px; position:absolute; left:17px; top:17px; font-size:19px; text-align:center; background-color:#adadad; border:1px solid #adadad; text-transform:capitalize; }
+#viewer { width:400px; height:400px; border:1px solid #fff; position:absolute; left:17px; top:78px; }
+#thumbs { width:222px; height:460px; position:absolute; right:17px; top:17px; }
+#thumbs img { width:100px; height:100px; float:left; margin:0 18px 18px 0; cursor:pointer; border:1px solid #fff; }
+#thumbs img.right { margin-right:0; }
+#thumbs img.ui-selected { border:1px solid #99ff99; }
+#tabs { padding:0; border:none; position:absolute; left:17px; background:none; }
+#tabs .ui-tabs-panel { padding:0; }
+#tabs .ui-tabs-nav { padding:0; border:none; position:relative; top:54px; background:none; }
+#tabs .ui-tabs-nav li { margin:0; }
+#tabs .ui-tabs-nav li a { padding:5px 4px; font-size:11px; text-transform:capitalize; }
+#tabs .ui-tabs-nav li.ui-tabs-selected a, #tabs .ui-tabs-nav li.ui-state-disabled a, #tabs .ui-tabs-nav li.ui-state-processing a { font-weight:bold; }

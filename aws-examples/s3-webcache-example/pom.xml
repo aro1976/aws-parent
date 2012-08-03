@@ -22,7 +22,29 @@
 					<accessKey>AKIAJTQAWEXYFGAGKS4Q</accessKey>
 					<secretKey>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</secretKey>
 					<bucketName>data.fs.dynamicflow</bucketName>
+					<includes>
+						<include>**/*.gif</include>
+						<include>**/*.jpg</include>
+						<include>**/*.tif</include>
+						<include>**/*.png</include>
+						<include>**/*.pdf</include>
+						<include>**/*.swf</include>
+						<include>**/*.eps</include>
+						<include>**/*.js</include>
+						<include>**/*.css</include>
+					</includes>
+					<excludes>
+						<exclude>WEB-INF/**</exclude>
+					</excludes>
 				</configuration>
+				<executions>
+					<execution>
+						<goals>
+							<goal>upload</goal>
+						</goals>
+						<phase>prepare-package</phase>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>

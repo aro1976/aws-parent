@@ -6,7 +6,10 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 
@@ -15,12 +18,15 @@ import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
 
-import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.maven.MavenExecutionException;
 import org.apache.maven.plugin.AbstractMojo;
+import org.apache.maven.plugin.MojoExecutionException;
+import org.codehaus.plexus.util.FileUtils;
 
-import br.com.dynamicflow.aws.s3.webcache.plugin.WebCacheConfig;
+import br.com.dynamicflow.aws.s3.webcache.util.WebCacheConfig;
+import br.com.dynamicflow.aws.s3.webcache.util.WebCacheManager;
 
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
@@ -29,9 +35,12 @@ import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 
 /**
- * Goal which touches a timestamp file.
- * 
+ * @prefix s3-webcache
+ * @requiresProject true
+ * @requiresOnline true
  * @goal upload
+ * @phase prepare-package
+ * @description Uploads static resources to a AWS S3 Bucket
  * 
  */
 public class S3WebCacheMojo extends AbstractMojo {
@@ -48,29 +57,86 @@ public class S3WebCacheMojo extends AbstractMojo {
 	/**
 	 * @parameter property="accessKey"
 	 */
-	String accessKey;
+	private String accessKey;
 	
 	/**
 	 * @parameter property="secretKey"
 	 */
-	String secretKey;
+	private String secretKey;
 	
 	/**
 	 * @parameter property="bucketName" 
 	 */
-	String bucketName;
+	private String bucketName;
 	
 	/**
 	 * @parameter property="hostName"
 	 */
-	String hostName;
+	private String hostName;
 	
 	/**
-	 * @parameter expression="${project.build.directory}/${project.build.finalName}"
-	 */
-	private File buildDir;
+	* The comma separated list of tokens to that will not be processed. 
+	* By default excludes all files under WEB-INF and META-INF directories.
+	* Note that you can use the Java Regular Expressions engine to
+	* include and exclude specific pattern using the expression %regex[].
+	* Hint: read the about (?!Pattern).
+	*
+	* @parameter
+	*/
+	private List<String> excludes;
 	
-	public void execute() {
+	/**
+	* The comma separated list of tokens that will br processed. 
+	* By default contains the extensions: gif, jpg, tif, png, pdf, swf, eps, js and css.
+	* Note that you can use the Java Regular Expressions engine 
+	* to include and exclude specific pattern
+	* using the expression %regex[].
+	*
+	* @parameter
+	*/
+	private List<String> includes;
+	
+	/**
+	* The directory where the webapp is built.
+	*
+	* @parameter default-value="${project.build.directory}/${project.build.finalName}"
+	* @required
+	*/
+	private File outputDirectory;
+	
+	/**
+	* Single directory for extra files to include in the WAR. This is where
+	* you place your JSP files.
+	*
+	* @parameter default-value="${basedir}/src/main/webapp"
+	* @required
+	*/
+	private File inputDirectory;
+	
+	/**
+	* Directory to encode files before uploading
+	*
+	* @parameter default-value="${project.build.directory}/s3-webcache/temp"
+	* @required
+	*/
+	private File tmpDirectory;
+	
+	/**
+	* Manifest File
+	*
+	* @parameter default-value="${project.build.directory}/${project.build.finalName}/WEB-INF/s3-webcache.xml""
+	* @required
+	*/
+	private File manifestFile;
+	
+	public void execute() throws MojoExecutionException {
+		getLog().info("tmpDirectory " + tmpDirectory.getPath());
+		getLog().info("inputDirectory " + inputDirectory.getPath());
+		getLog().info("outputDirectory " + outputDirectory.getPath());
+		getLog().info("manifestFile " + manifestFile.getPath());
+		getLog().info("includes " + includes);
+		getLog().info("excludes " + excludes);
+		
 		if (hostName==null || hostName.length()==0) {
 			hostName=bucketName+"."+S3_URL;
 		}
@@ -81,33 +147,43 @@ public class S3WebCacheMojo extends AbstractMojo {
 		BasicAWSCredentials awsCredentials = new BasicAWSCredentials(accessKey,secretKey);
 		AmazonS3Client client = new AmazonS3Client(awsCredentials);
 		
-		getLog().info( "determining files that should be uploaded" );
-		
-		String fileName = "grails_logo.jpg";
-		
-		// para cada arquivo
-		ObjectMetadata objectMetadata = retrieveObjectMetadata(client, fileName);	
-		
-		if (objectMetadata != null && objectMetadata.getETag().equals(calculateETag(fileName))) {
-			getLog().info("the object "+fileName+" stored at "+bucketName+" does not require update");
-		} else {
-			uploadFile(client, fileName);
+		try {
+			getLog().info( "determining files that should be uploaded" );
+			getLog().info("");
+			List<String> fileNames = FileUtils.getFileNames(inputDirectory, convertToString(includes), convertToString(excludes), true, false);
+			for (String fileName: fileNames) {
+				processFile(client, webCacheConfig, new File(fileName));
+			}
+		} catch (IOException e) {
+			throw new MojoExecutionException("cannot determine the files to be processed", e);
 		}
 		
-		String digest = calculateDigest(fileName);
-		webCacheConfig.addToCachedFiles(fileName,digest);
-		
-		// finaliza para cada arquivo
 		generateConfigManifest(webCacheConfig);
-
-		getLog().info( "closing S3 connection" );	
 	}
 
-	private void uploadFile(AmazonS3Client client, String fileName) {
-		getLog().info("uploading file "+fileName+" to "+bucketName);	
+	private void processFile(AmazonS3Client client, WebCacheConfig webCacheConfig, File file)
+			throws MojoExecutionException {
+		getLog().info("start processing file "+file.getPath()); 
+		
+		ObjectMetadata objectMetadata = retrieveObjectMetadata(client, file);	
+		
+		if (objectMetadata != null && objectMetadata.getETag().equals(calculateETag(file))) {
+			getLog().info("the object "+file.getName()+" stored at "+bucketName+" does not require update");
+		} else {
+			uploadFile(client, file);
+		}
+		
+		String digest = calculateDigest(file);
+		
+		webCacheConfig.addToCachedFiles(file.getPath().substring(inputDirectory.getPath().length()),digest);
+		
+		getLog().info("finnish processing file "+file.getPath());
+		getLog().info("");
+	}
+
+	private void uploadFile(AmazonS3Client client, File file) throws MojoExecutionException {
+		getLog().info("uploading file "+file+" to "+bucketName);	
 		try {
-			File file = new File(fileName);
-			
 			MimetypesFileTypeMap mimetypesFileTypeMap = new MimetypesFileTypeMap();
 			ObjectMetadata objectMetadata = new ObjectMetadata();
 			objectMetadata.setContentLength(file.length());
@@ -118,62 +194,76 @@ public class S3WebCacheMojo extends AbstractMojo {
 			objectMetadata.setHeader("Expires", httpDateFormat.format(calendar.getTime()));
 			objectMetadata.setLastModified(new Date(file.lastModified()));
 			objectMetadata.setContentType(mimetypesFileTypeMap.getContentType(file));
-			client.putObject(bucketName, fileName, new FileInputStream(file), objectMetadata);
+			client.putObject(bucketName, file.getName(), new FileInputStream(file), objectMetadata);
 			
+		} catch (AmazonServiceException e) {
+			throw new MojoExecutionException("could not upload file "+file.getName(),e);
+		} catch (AmazonClientException e) {
+			throw new MojoExecutionException("could not upload file "+file.getName(),e);
 		} catch (FileNotFoundException e) {
 			getLog().error(e);
-		} 
+		}
 	}
 	
-	private ObjectMetadata retrieveObjectMetadata(AmazonS3Client client, String fileName) {
-		getLog().info("retrieving metadata for "+fileName);
+	private ObjectMetadata retrieveObjectMetadata(AmazonS3Client client, File file) throws MojoExecutionException {
+		getLog().info("retrieving metadata for "+file);
 		ObjectMetadata objectMetadata = null;
 
-		objectMetadata = client.getObjectMetadata(bucketName, fileName);
-		getLog().info( "object metadata ETag: " + objectMetadata.getETag());
-		getLog().info( "object metadata ContentMD5: " + objectMetadata.getContentMD5());
-		getLog().info( "object metadata ContentType: " + objectMetadata.getContentType());
-		getLog().info( "object metadata CacheControl: " + objectMetadata.getCacheControl());
-		getLog().info( "object metadata ContentEncoding: " + objectMetadata.getContentEncoding());
-		getLog().info( "object metadata ContentDisposition: " + objectMetadata.getContentDisposition());
-		getLog().info( "object metadata ContentLength: " + objectMetadata.getContentLength());
-		getLog().info( "object metadata LastModified: " + objectMetadata.getLastModified());
-
+		try {
+			objectMetadata = client.getObjectMetadata(bucketName, file.getName());
+			getLog().info( "  ETag: " + objectMetadata.getETag());
+			getLog().info( "  ContentMD5: " + objectMetadata.getContentMD5());
+			getLog().info( "  ContentType: " + objectMetadata.getContentType());
+			getLog().info( "  CacheControl: " + objectMetadata.getCacheControl());
+			getLog().info( "  ContentEncoding: " + objectMetadata.getContentEncoding());
+			getLog().info( "  ContentDisposition: " + objectMetadata.getContentDisposition());
+			getLog().info( "  ContentLength: " + objectMetadata.getContentLength());
+			getLog().info( "  LastModified: " + objectMetadata.getLastModified());
+		} catch (AmazonServiceException e) {
+			getLog().info("  no object metadata found");
+		} catch (AmazonClientException e) {
+			throw new MojoExecutionException("  could not retrieve object metadata",e);
+		}
 		return objectMetadata;
 	}
 
-	private String calculateETag(String fileName) {
+	private String calculateETag(File file) throws MojoExecutionException {
 		String eTag = null;
 		try {
-			eTag = Hex.encodeHexString(DigestUtils.md5(new FileInputStream(new File(fileName))));
+			eTag = Hex.encodeHexString(DigestUtils.md5(new FileInputStream(file)));
 		} catch (Exception e) {
-			getLog().error(e);
+			throw new MojoExecutionException("could not calculate ETag for "+file.getName(),e);
 		} 
-		getLog().info("eTag for "+fileName+" is "+eTag);
+		getLog().info("eTag for "+file.getName()+" is "+eTag);
 		return eTag;
 	}
 	
-	private String calculateDigest(String fileName) {
+	private String calculateDigest(File file) throws MojoExecutionException {
 		String digest = null;
 		try {
-			digest = Hex.encodeHexString(DigestUtils.sha256(new FileInputStream(new File(fileName))));
+			digest = Hex.encodeHexString(DigestUtils.sha256(new FileInputStream(file)));
 		} catch (Exception e) {
-			getLog().error(e);
+			throw new MojoExecutionException("could not calculate digest for "+file.getName(),e);
 		} 
-		getLog().info("digest for "+fileName+" is "+digest);
+		getLog().info("digest for "+file.getName()+" is "+digest);
 		return digest;
 	}
 	
-	private void generateConfigManifest(WebCacheConfig webCacheConfig) {
-		File manifestFile = new File(buildDir,"WEB-INF"+"/"+"s3-webcache.xml");
-		getLog().info("generating s3-webcache configuration manifest into "+ manifestFile.getPath());
-		try {
-			JAXBContext context = JAXBContext.newInstance(WebCacheConfig.class);
-			Marshaller marshaller = context.createMarshaller();
-			marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
-			marshaller.marshal(webCacheConfig, manifestFile);
-		} catch (JAXBException e) {
-			getLog().error(e);
+	private void generateConfigManifest(WebCacheConfig webCacheConfig) throws MojoExecutionException {
+		WebCacheManager webCacheManager = new WebCacheManager(manifestFile);
+		webCacheManager.persistConfig(webCacheConfig);
+		WebCacheConfig loaded = webCacheManager.loadConfig();
+		getLog().info("loaded "+loaded);
+	}
+	
+	private String convertToString(List<String> list) {
+		StringBuilder builder = new StringBuilder();
+		int i = 0;
+		for (Iterator<?> iterator = list.iterator(); iterator.hasNext(); i++) {
+			if (i > 0)
+				builder.append(", ");
+			builder.append(iterator.next());
 		}
+		return builder.toString();
 	}
 }
