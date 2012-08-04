@@ -1,6 +1,10 @@
 package br.com.dynamicflow.aws.s3.webcache.util;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.logging.Logger;
 
 import javax.xml.bind.JAXBContext;
@@ -10,15 +14,11 @@ import javax.xml.bind.Unmarshaller;
 
 public class WebCacheManager {
 	
+	public static final String DEFAULT_MANIFEST = "/WEB-INF/s3-webcache.xml";
+	
 	private static final Logger log = Logger.getLogger("WebCacheManager.class");
-	
-	private File manifestFile;
-	
-	public WebCacheManager(File manifestFile) {
-		this.manifestFile = manifestFile;
-	}
 
-	public void persistConfig(WebCacheConfig webCacheConfig) {
+	public void persistConfig(WebCacheConfig webCacheConfig, File manifestFile) {
 		log.info("generating s3-webcache configuration manifest into "+ manifestFile.getPath());
 		try {
 			JAXBContext context = JAXBContext.newInstance(WebCacheConfig.class);
@@ -37,15 +37,31 @@ public class WebCacheManager {
 		}
 	}
 	
-	public WebCacheConfig loadConfig() {
+	public WebCacheConfig loadConfig(File manifestFile) {
 		log.info("loading s3-webcache from manifest "+ manifestFile.getPath());
+		try {
+			return loadConfig(new FileInputStream(manifestFile));
+		} catch (FileNotFoundException e) {
+			throw new RuntimeException("could not read config manifest",e);
+		}
+	}
+	
+	public WebCacheConfig loadConfig(InputStream is) {
 		try {
 			JAXBContext context = JAXBContext.newInstance(WebCacheConfig.class);
 			Unmarshaller unmarshaller = context.createUnmarshaller();
-			WebCacheConfig webCacheConfig = (WebCacheConfig) unmarshaller.unmarshal(manifestFile);
+			WebCacheConfig webCacheConfig = (WebCacheConfig) unmarshaller.unmarshal(is);
 			return webCacheConfig;
 		} catch (JAXBException e) {
-			throw new RuntimeException("could not generate config manifest",e);
+			throw new RuntimeException("could not read config manifest",e);
+		} finally {
+			try {
+				if (is != null) {
+					is.close();
+				}
+			} catch (IOException e) {
+				throw new RuntimeException("could not read config manifest",e);
+			}
 		}
 	}
 }

@@ -6,7 +6,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
-import java.util.Collection;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -14,13 +13,9 @@ import java.util.Locale;
 import java.util.TimeZone;
 
 import javax.activation.MimetypesFileTypeMap;
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBException;
-import javax.xml.bind.Marshaller;
 
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.codec.digest.DigestUtils;
-import org.apache.maven.MavenExecutionException;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.codehaus.plexus.util.FileUtils;
@@ -163,17 +158,17 @@ public class S3WebCacheMojo extends AbstractMojo {
 
 	private void processFile(AmazonS3Client client, WebCacheConfig webCacheConfig, File file)
 			throws MojoExecutionException {
-		getLog().info("start processing file "+file.getPath()); 
+		getLog().info("start processing file "+file.getPath()); 	
 		
-		ObjectMetadata objectMetadata = retrieveObjectMetadata(client, file);	
+		String digest = calculateDigest(file);
+		
+		ObjectMetadata objectMetadata = retrieveObjectMetadata(client, digest);
 		
 		if (objectMetadata != null && objectMetadata.getETag().equals(calculateETag(file))) {
 			getLog().info("the object "+file.getName()+" stored at "+bucketName+" does not require update");
 		} else {
-			uploadFile(client, file);
+			uploadFile(client, file, digest);
 		}
-		
-		String digest = calculateDigest(file);
 		
 		webCacheConfig.addToCachedFiles(file.getPath().substring(inputDirectory.getPath().length()),digest);
 		
@@ -181,10 +176,12 @@ public class S3WebCacheMojo extends AbstractMojo {
 		getLog().info("");
 	}
 
-	private void uploadFile(AmazonS3Client client, File file) throws MojoExecutionException {
+	private void uploadFile(AmazonS3Client client, File file, String remoteFileName) throws MojoExecutionException {
 		getLog().info("uploading file "+file+" to "+bucketName);	
 		try {
 			MimetypesFileTypeMap mimetypesFileTypeMap = new MimetypesFileTypeMap();
+			String contentType = mimetypesFileTypeMap.getContentType(file);
+			getLog().info("content type for "+file.getName()+" is "+contentType);
 			ObjectMetadata objectMetadata = new ObjectMetadata();
 			objectMetadata.setContentLength(file.length());
 			objectMetadata.setHeader("Content-Disposition", "filename="+file.getName());
@@ -193,9 +190,8 @@ public class S3WebCacheMojo extends AbstractMojo {
 			calendar.add(Calendar.YEAR, 10);
 			objectMetadata.setHeader("Expires", httpDateFormat.format(calendar.getTime()));
 			objectMetadata.setLastModified(new Date(file.lastModified()));
-			objectMetadata.setContentType(mimetypesFileTypeMap.getContentType(file));
-			client.putObject(bucketName, file.getName(), new FileInputStream(file), objectMetadata);
-			
+			objectMetadata.setContentType(contentType);
+			client.putObject(bucketName, remoteFileName, new FileInputStream(file), objectMetadata);			
 		} catch (AmazonServiceException e) {
 			throw new MojoExecutionException("could not upload file "+file.getName(),e);
 		} catch (AmazonClientException e) {
@@ -205,12 +201,12 @@ public class S3WebCacheMojo extends AbstractMojo {
 		}
 	}
 	
-	private ObjectMetadata retrieveObjectMetadata(AmazonS3Client client, File file) throws MojoExecutionException {
-		getLog().info("retrieving metadata for "+file);
+	private ObjectMetadata retrieveObjectMetadata(AmazonS3Client client, String remoteFileName) throws MojoExecutionException {
+		getLog().info("retrieving metadata for "+remoteFileName);
 		ObjectMetadata objectMetadata = null;
 
 		try {
-			objectMetadata = client.getObjectMetadata(bucketName, file.getName());
+			objectMetadata = client.getObjectMetadata(bucketName, remoteFileName);
 			getLog().info( "  ETag: " + objectMetadata.getETag());
 			getLog().info( "  ContentMD5: " + objectMetadata.getContentMD5());
 			getLog().info( "  ContentType: " + objectMetadata.getContentType());
@@ -250,8 +246,8 @@ public class S3WebCacheMojo extends AbstractMojo {
 	}
 	
 	private void generateConfigManifest(WebCacheConfig webCacheConfig) throws MojoExecutionException {
-		WebCacheManager webCacheManager = new WebCacheManager(manifestFile);
-		webCacheManager.persistConfig(webCacheConfig);
+		WebCacheManager webCacheManager = new WebCacheManager();
+		webCacheManager.persistConfig(webCacheConfig, manifestFile);
 	}
 	
 	private String convertToString(List<String> list) {

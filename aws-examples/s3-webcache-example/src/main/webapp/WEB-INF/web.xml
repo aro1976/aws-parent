@@ -5,4 +5,15 @@
   xsi:schemaLocation="http://java.sun.com/xml/ns/javaee 
       http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
   version="2.5">
+  
+  <filter>
+  	<filter-name>WebCacheFilter</filter-name>
+  	<filter-class>br.com.dynamicflow.aws.s3.webcache.util.WebCacheFilter</filter-class>
+  </filter>
+  
+  <filter-mapping>
+  	<filter-name>WebCacheFilter</filter-name>
+  	<url-pattern>*</url-pattern>
+  </filter-mapping>
+  
 </web-app>
