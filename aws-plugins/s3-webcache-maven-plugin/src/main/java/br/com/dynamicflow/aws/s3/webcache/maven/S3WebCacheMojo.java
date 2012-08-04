@@ -252,8 +252,6 @@ public class S3WebCacheMojo extends AbstractMojo {
 	private void generateConfigManifest(WebCacheConfig webCacheConfig) throws MojoExecutionException {
 		WebCacheManager webCacheManager = new WebCacheManager(manifestFile);
 		webCacheManager.persistConfig(webCacheConfig);
-		WebCacheConfig loaded = webCacheManager.loadConfig();
-		getLog().info("loaded "+loaded);
 	}
 	
 	private String convertToString(List<String> list) {
