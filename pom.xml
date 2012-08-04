@@ -72,4 +72,9 @@
 			</plugin>
 		</plugins>
 	</build>
+	<scm>
+		<connection>scm:git:https://github.com/aro1976/aws-parent.git</connection>
+		<developerConnection>scm:git:https://github.com/aro1976/aws-parent.git</developerConnection>
+		<url>https://github.com/aro1976/aws-parent</url>
+	</scm>
 </project>
