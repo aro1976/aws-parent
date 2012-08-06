@@ -1,4 +1,5 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>br.com.dynamicflow.aws</groupId>
 	<artifactId>aws-parent</artifactId>
@@ -8,11 +9,35 @@
 	<url>http://aws.amazon.com</url>
 	<organization>
 		<name>Dynamic Flow S/S Ltda.</name>
+		<url>https://github.com/aro1976/aws-parent</url>
 	</organization>
 	<inceptionYear>2012</inceptionYear>
 
-	<dependencyManagement>
+	<distributionManagement>
+	     <repository>
+	         <id>dynamicflow-release</id>
+	         <name>Dynamic Flow - S3 Maven Release Repository</name>
+	         <url>s3://maven.dynamicflow/release</url>
+	     </repository>
+	     <snapshotRepository>
+	     	 <id>dynamicflow-snapshot</id>
+	         <name>Dynamic Flow - S3 Maven Snapshot Repository</name>
+	         <url>s3://maven.dynamicflow/snapshot</url>
+	     </snapshotRepository>
+	     <site>
+	     	<id>dynamicflow-site</id>
+ 			<name>Dynamic Flow - S3 Maven Site</name>
+	        <url>s3://maven.dynamicflow/site</url>
+	     </site>
+	 </distributionManagement>
+ 
+ 	<dependencyManagement>
 		<dependencies>
+			<dependency>
+				<groupId>org.springframework.build.aws</groupId>
+				<artifactId>org.springframework.build.aws.maven</artifactId>
+				<version>3.0.0.RELEASE</version>
+			</dependency>
 			<dependency>
 				<groupId>javax.servlet</groupId>
 				<artifactId>javax.servlet-api</artifactId>
@@ -52,6 +77,14 @@
 		</dependencies>
 	</dependencyManagement>
 
+	<dependencies>
+		<dependency>
+			<groupId>org.springframework.build.aws</groupId>
+			<artifactId>org.springframework.build.aws.maven</artifactId>
+			<version>3.0.0.RELEASE</version>
+		</dependency>
+	</dependencies>
+	
 	<modules>
 		<module>aws-utils</module>
 		<module>aws-plugins</module>
@@ -71,9 +104,11 @@
 			</plugin>
 		</plugins>
 	</build>
+	
 	<scm>
 		<connection>scm:git:https://github.com/aro1976/aws-parent.git</connection>
 		<developerConnection>scm:git:https://github.com/aro1976/aws-parent.git</developerConnection>
 		<url>https://github.com/aro1976/aws-parent</url>
 	</scm>
+	
 </project>
