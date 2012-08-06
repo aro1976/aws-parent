@@ -3,6 +3,7 @@ package br.com.dynamicflow.aws.s3.webcache.maven;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -12,6 +13,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
+import java.util.zip.GZIPOutputStream;
 
 import javax.activation.MimetypesFileTypeMap;
 
@@ -55,7 +57,17 @@ public class S3WebCacheMojo extends AbstractMojo {
 
 	private static final List<String> DIGEST_OPTIONS = Arrays.asList(new String[]{DIGEST_MD5,DIGEST_SHA1,DIGEST_SHA256,DIGEST_SHA384,DIGEST_SHA512});
 	
-	static final String S3_URL = "s3.amazonaws.com";
+	private static final String CONTENT_ENCODING_PLAIN = "plain";
+
+	private static final String CONTENT_ENCODING_GZIP = "gzip";
+
+	private static final List<String> CONTENT_ENCODING_OPTIONS = Arrays.asList(new String[]{CONTENT_ENCODING_PLAIN,CONTENT_ENCODING_GZIP});
+	
+	private static final int BUFFER_SIZE = 4096;
+	
+	public static final String S3_URL = "s3.amazonaws.com";
+	
+	private static final MimetypesFileTypeMap mimeMap = new MimetypesFileTypeMap();
 	
 	private static final SimpleDateFormat httpDateFormat;
 	 
@@ -140,12 +152,12 @@ public class S3WebCacheMojo extends AbstractMojo {
 	private File manifestFile;
 	
 	/**
-	* Encoding Type
+	* Content Encoding Type
 	*
-	* @parameter default-value="plain"
+	* @parameter default-value="gzip"
 	* @required
 	*/
-	private String encoding;
+	private String contentEncoding;
 	
 	/**
 	* Digest Type
@@ -196,14 +208,17 @@ public class S3WebCacheMojo extends AbstractMojo {
 			throws MojoExecutionException {
 		getLog().info("start processing file "+file.getPath()); 	
 		
-		String digest = calculateDigest(file);
+		File encodedFile = encodeFile(file);
+		String contentType = mimeMap.getContentType(file);
+		
+		String digest = calculateDigest(encodedFile);
 		
 		ObjectMetadata objectMetadata = retrieveObjectMetadata(client, digest);
 		
-		if (objectMetadata != null && objectMetadata.getETag().equals(calculateETag(file))) {
+		if (objectMetadata != null && objectMetadata.getETag().equals(calculateETag(encodedFile))) {
 			getLog().info("the object "+file.getName()+" stored at "+bucketName+" does not require update");
 		} else {
-			uploadFile(client, file, digest);
+			uploadFile(client, encodedFile, digest, contentType);
 		}
 		
 		webCacheConfig.addToCachedFiles(file.getPath().substring(inputDirectory.getPath().length()),digest);
@@ -212,11 +227,54 @@ public class S3WebCacheMojo extends AbstractMojo {
 		getLog().info("");
 	}
 
-	private void uploadFile(AmazonS3Client client, File file, String remoteFileName) throws MojoExecutionException {
+	private File encodeFile(File file) throws MojoExecutionException {
+		getLog().info("contentEncoding file "+file.getPath()+" using "+contentEncoding);
+		if (!tmpDirectory.exists() && !tmpDirectory.mkdirs()) {
+			throw new MojoExecutionException("cannot create directory "+tmpDirectory);
+		}
+		
+		File encodedFile = null;
+		if (CONTENT_ENCODING_PLAIN.equalsIgnoreCase(contentEncoding)) {
+			encodedFile = file;
+		}
+		else if (CONTENT_ENCODING_GZIP.equals(contentEncoding)) {
+			FileInputStream fis = null;
+			GZIPOutputStream gzipos = null;
+			try {
+				byte buffer[] = new byte[BUFFER_SIZE];
+				encodedFile = File.createTempFile(file.getName()+"-",".tmp", tmpDirectory);
+				fis = new FileInputStream(file);
+				gzipos = new GZIPOutputStream(new FileOutputStream(encodedFile));
+				int read = 0;
+				do {
+					read = fis.read(buffer, 0, buffer.length);
+					if (read>0)
+						gzipos.write(buffer, 0, read);
+				} while (read>=0);
+			} catch (Exception e) {
+				throw new MojoExecutionException("could not process "+file.getName(),e);
+			} finally {
+				if (fis!= null)
+					try {
+						fis.close();
+					} catch (IOException e) {
+						throw new MojoExecutionException("could not process "+file.getName(),e);
+					}
+				if (gzipos!= null)
+					try {
+						gzipos.close();
+					} catch (IOException e) {
+						throw new MojoExecutionException("could not process "+encodedFile.getName(),e);
+					}
+			}
+		}
+		
+		return encodedFile;
+	}
+
+	private void uploadFile(AmazonS3Client client, File file, String remoteFileName, String contentType) throws MojoExecutionException {
 		getLog().info("uploading file "+file+" to "+bucketName);	
 		try {
-			MimetypesFileTypeMap mimetypesFileTypeMap = new MimetypesFileTypeMap();
-			String contentType = mimetypesFileTypeMap.getContentType(file);
 			getLog().info("content type for "+file.getName()+" is "+contentType);
 			ObjectMetadata objectMetadata = new ObjectMetadata();
 			objectMetadata.setContentLength(file.length());
@@ -226,6 +284,9 @@ public class S3WebCacheMojo extends AbstractMojo {
 			calendar.add(Calendar.YEAR, 10);
 			objectMetadata.setHeader("Expires", httpDateFormat.format(calendar.getTime()));
 			objectMetadata.setLastModified(new Date(file.lastModified()));
+			if (!CONTENT_ENCODING_PLAIN.equalsIgnoreCase(contentEncoding)) {
+				objectMetadata.setContentEncoding(contentEncoding.toLowerCase());
+			}
 			objectMetadata.setContentType(contentType);
 			client.putObject(bucketName, remoteFileName, new FileInputStream(file), objectMetadata);			
 		} catch (AmazonServiceException e) {
