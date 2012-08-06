@@ -3,7 +3,7 @@
 	<parent>
 		<groupId>br.com.dynamicflow.aws</groupId>
 		<artifactId>aws-parent</artifactId>
-		<version>0.0.2-SNAPSHOT</version>
+		<version>0.0.2</version>
 	</parent>
 	<artifactId>aws-utils</artifactId>
 	<packaging>pom</packaging>
