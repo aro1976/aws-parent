@@ -39,6 +39,7 @@
 					<accessKey>${aws.accessKey}</accessKey>
 					<secretKey>${aws.secretKey}</secretKey>
 					<bucketName>${aws.bucketName}</bucketName>
+					<digestType>md5</digestType>
 					<includes>
 						<include>**/*.gif</include>
 						<include>**/*.jpg</include>

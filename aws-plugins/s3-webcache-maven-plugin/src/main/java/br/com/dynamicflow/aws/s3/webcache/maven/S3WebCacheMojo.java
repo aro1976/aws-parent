@@ -5,6 +5,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Iterator;
@@ -29,6 +30,8 @@ import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 
+import edu.emory.mathcs.backport.java.util.Arrays;
+
 /**
  * @prefix s3-webcache
  * @requiresProject true
@@ -39,6 +42,18 @@ import com.amazonaws.services.s3.model.ObjectMetadata;
  * 
  */
 public class S3WebCacheMojo extends AbstractMojo {
+	
+	private static final String DIGEST_SHA512 = "sha512";
+
+	private static final String DIGEST_SHA384 = "sha384";
+
+	private static final String DIGEST_SHA256 = "sha256";
+
+	private static final String DIGEST_SHA1 = "sha1";
+
+	private static final String DIGEST_MD5 = "md5";
+
+	private static final List<String> DIGEST_OPTIONS = Arrays.asList(new String[]{DIGEST_MD5,DIGEST_SHA1,DIGEST_SHA256,DIGEST_SHA384,DIGEST_SHA512});
 	
 	static final String S3_URL = "s3.amazonaws.com";
 	
@@ -119,10 +134,26 @@ public class S3WebCacheMojo extends AbstractMojo {
 	/**
 	* Manifest File
 	*
-	* @parameter default-value="${project.build.directory}/${project.build.finalName}/WEB-INF/s3-webcache.xml""
+	* @parameter default-value="${project.build.directory}/${project.build.finalName}/WEB-INF/s3-webcache.xml"
 	* @required
 	*/
 	private File manifestFile;
+	
+	/**
+	* Encoding Type
+	*
+	* @parameter default-value="plain"
+	* @required
+	*/
+	private String encoding;
+	
+	/**
+	* Digest Type
+	*
+	* @parameter default-value="sha256"
+	* @required
+	*/
+	private String digestType;
 	
 	public void execute() throws MojoExecutionException {
 		getLog().info("tmpDirectory " + tmpDirectory.getPath());
@@ -136,6 +167,11 @@ public class S3WebCacheMojo extends AbstractMojo {
 			hostName=bucketName+"."+S3_URL;
 		}
 		getLog().info("using hostName " + hostName);
+		
+		if (!contains(DIGEST_OPTIONS, digestType)) {
+			throw new MojoExecutionException("digestType "+digestType+" must be in "+DIGEST_OPTIONS);
+		}
+		getLog().info("using digestType "+digestType);
 		
 		WebCacheConfig webCacheConfig = new WebCacheConfig(hostName);
 		
@@ -234,10 +270,37 @@ public class S3WebCacheMojo extends AbstractMojo {
 		return eTag;
 	}
 	
+	private boolean contains(List<String> digestOptions, String search) {
+		if (search == null) {
+			throw new IllegalArgumentException("search cannot be null");
+		}
+		for (String item: digestOptions) {
+			if (search.equalsIgnoreCase(item)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
 	private String calculateDigest(File file) throws MojoExecutionException {
 		String digest = null;
 		try {
-			digest = Hex.encodeHexString(DigestUtils.sha256(new FileInputStream(file)));
+			if (DIGEST_MD5.equalsIgnoreCase(digestType)) {
+				digest = Hex.encodeHexString(DigestUtils.md5(new FileInputStream(file)));
+			} 
+			else if (DIGEST_SHA1.equalsIgnoreCase(digestType)) {
+				digest = Hex.encodeHexString(DigestUtils.sha(new FileInputStream(file)));
+			}
+			else if (DIGEST_SHA256.equalsIgnoreCase(digestType)) {
+				digest = Hex.encodeHexString(DigestUtils.sha256(new FileInputStream(file)));
+			}
+			else if (DIGEST_SHA384.equalsIgnoreCase(digestType)) {
+				digest = Hex.encodeHexString(DigestUtils.sha384(new FileInputStream(file)));
+			} 
+			else if (DIGEST_SHA512.equalsIgnoreCase(digestType)) {
+				digest = Hex.encodeHexString(DigestUtils.sha512(new FileInputStream(file)));
+			} 
+
 		} catch (Exception e) {
 			throw new MojoExecutionException("could not calculate digest for "+file.getName(),e);
 		} 
