@@ -37,6 +37,7 @@
 				<groupId>org.springframework.build.aws</groupId>
 				<artifactId>org.springframework.build.aws.maven</artifactId>
 				<version>3.0.0.RELEASE</version>
+				<scope>provided</scope>
 			</dependency>
 			<dependency>
 				<groupId>javax.servlet</groupId>
@@ -76,14 +77,6 @@
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
-
-	<dependencies>
-		<dependency>
-			<groupId>org.springframework.build.aws</groupId>
-			<artifactId>org.springframework.build.aws.maven</artifactId>
-			<version>3.0.0.RELEASE</version>
-		</dependency>
-	</dependencies>
 	
 	<modules>
 		<module>aws-utils</module>
@@ -101,6 +94,18 @@
 					<source>1.6</source>
 					<target>1.6</target>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-deploy-plugin</artifactId>
+				<version>2.5</version>
+				<dependencies>
+					<dependency>
+						<groupId>org.springframework.build.aws</groupId>
+						<artifactId>org.springframework.build.aws.maven</artifactId>
+						<version>3.0.0.RELEASE</version>
+					</dependency>
+				</dependencies>
 			</plugin>
 		</plugins>
 	</build>
