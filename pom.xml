@@ -3,7 +3,7 @@
 	<groupId>br.com.dynamicflow.aws</groupId>
 	<artifactId>aws-parent</artifactId>
 	<packaging>pom</packaging>
-	<version>0.0.3-SNAPSHOT</version>
+	<version>0.0.3</version>
 	<name>AWS Parent</name>
 	<url>http://aws.amazon.com</url>
 	<organization>
