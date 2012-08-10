@@ -8,7 +8,7 @@
 	<parent>
 		<groupId>br.com.dynamicflow.aws</groupId>
 		<artifactId>aws-examples</artifactId>
-		<version>0.0.3</version>
+		<version>0.0.4-SNAPSHOT</version>
 	</parent>
 
 	<dependencies>
@@ -34,7 +34,7 @@
 			<plugin>
 				<groupId>br.com.dynamicflow.aws</groupId>
 				<artifactId>s3-webcache-maven-plugin</artifactId>
-				<version>0.0.3</version>
+				<version>0.0.4-SNAPSHOT</version>
 				<configuration>
 					<accessKey>${aws.accessKey}</accessKey>
 					<secretKey>${aws.secretKey}</secretKey>
