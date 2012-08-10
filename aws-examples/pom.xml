@@ -10,6 +10,7 @@
 	<name>AWS Examples</name>
 
 	<modules>
-		<module>s3-webcache-example</module>
+		<module>s3-webcache-example1</module>
+		<module>s3-webcache-example2</module>
 	</modules>	
 </project>
