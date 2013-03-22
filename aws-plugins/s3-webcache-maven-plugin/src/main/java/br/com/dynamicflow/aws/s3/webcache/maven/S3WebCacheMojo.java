@@ -178,6 +178,7 @@ public class S3WebCacheMojo extends AbstractMojo {
 		if (hostName==null || hostName.length()==0) {
 			hostName=bucketName+"."+S3_URL;
 		}
+		
 		getLog().info("using hostName " + hostName);
 		
 		if (!contains(DIGEST_OPTIONS, digestType)) {
